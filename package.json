@@ -11,6 +11,8 @@
     "@contentful/react-apps-toolkit": "^1.2.16",
     "@emotion/react": "^11.11.1",
     "contentful-management": "10.38.3",
+    "lodash.debounce": "^4.0.8",
+    "lodash.throttle": "^4.1.1",
     "react": "^18.2.0",
     "react-dom": "^18.2.0",
     "react-scripts": "^5.0.1"
@@ -40,6 +42,8 @@
     "@autotelic/eslint-config-react": "^0.2.1",
     "@contentful/app-scripts": "^1.10.2",
     "@tsconfig/create-react-app": "^2.0.0",
+    "@types/lodash.debounce": "^4.0.7",
+    "@types/lodash.throttle": "^4.1.7",
     "@types/node": "^20.3.2",
     "@types/react": "^18.2.14",
     "@types/react-dom": "^18.2.6",
@@ -49,5 +53,6 @@
     "eslint": "^8.43.0",
     "eslint-import-resolver-typescript": "^3.5.5",
     "typescript": "^5.1.6"
-  }
+  },
+  "homepage": "."
 }

@@ -1,12 +1,15 @@
 /** @jsxImportSource @emotion/react */
 
-import React, { useState, useEffect } from 'react'
+import React, { useState, useEffect, useRef, useCallback } from 'react'
 
-import { EntryFieldAPI, SidebarAppSDK } from '@contentful/app-sdk'
-import { List, ListItem, Note } from '@contentful/f36-components'
+import { EntryFieldAPI, EntrySys, SidebarAppSDK } from '@contentful/app-sdk'
+import { SkeletonContainer, SkeletonDisplayText, SkeletonImage, EntityStatus, EntityStatusBadge, FormControl, Text } from '@contentful/f36-components'
+import tokens from '@contentful/f36-tokens'
 import { useSDK } from '@contentful/react-apps-toolkit'
 import { css } from '@emotion/react'
-import { SysLink } from 'contentful-management'
+import { EntityMetaSysProps, SysLink } from 'contentful-management'
+
+import PublishButton from '../components/PublishButton'
 
 const LINK_CONTENT_TYPE = 'Link'
 const ASSET_CONTENT_TYPE = 'Asset'
@@ -27,9 +30,13 @@ interface InvalidLinkError extends LinkMeta {
 
 type TrackedFieldState = Record<string, LinkMeta[]>
 
+const getInvalidLinkMsg = (fieldName: string) => (
+  `The field "${fieldName}" contains a reference to unpublished content`
+)
+
 const createInvalidLinkError = (linkMeta: LinkMeta) => ({
   ...linkMeta,
-  message: `The field "${linkMeta.fieldName}" contains a reference to unpublished content`
+  message: getInvalidLinkMsg(linkMeta.fieldName)
 })
 
 const getLinkMeta = (field: EntryFieldAPI, link: SysLink) => {
@@ -42,6 +49,38 @@ const getLinkMeta = (field: EntryFieldAPI, link: SysLink) => {
   }))
 }
 
+/*
+ * These are the Contentfuls recommended ways to determine an entry's status
+ * https://www.contentful.com/developers/docs/tutorials/general/determine-entry-asset-state/
+ */
+
+function isChanged (sys: EntrySys | EntityMetaSysProps) {
+  return !!sys.publishedVersion &&
+    sys.version >= sys.publishedVersion + 2
+}
+
+function isDraft (sys: EntrySys | EntityMetaSysProps) {
+  return !sys.publishedVersion
+}
+
+function isPublished (sys: EntrySys | EntityMetaSysProps) {
+  return !!sys.publishedVersion &&
+    // eslint-disable-next-line eqeqeq
+    sys.version == sys.publishedVersion + 1
+}
+
+function isArchived (sys: EntrySys | EntityMetaSysProps) {
+  return !!sys.archivedVersion
+}
+
+function getEntityStatus (sys: EntrySys | EntityMetaSysProps): EntityStatus {
+  if (isArchived(sys)) return 'archived'
+  if (isChanged(sys)) return 'changed'
+  if (isDraft(sys)) return 'draft'
+  if (isPublished(sys)) return 'published'
+  return 'new'
+}
+
 async function getInvalidLink (
   linkMeta: LinkMeta,
   sdk: SidebarAppSDK
@@ -51,7 +90,7 @@ async function getInvalidLink (
       ? await sdk.cma.asset.get({ assetId: linkMeta.linkId })
       : await sdk.cma.entry.get({ entryId: linkMeta.linkId })
 
-    if (!res.sys.publishedAt) {
+    if (!isPublished(res.sys)) {
       return createInvalidLinkError(linkMeta)
     }
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -62,12 +101,85 @@ async function getInvalidLink (
   }
 }
 
+function useInterval (callback: () => void | Promise<void>, delay: number) {
+  const savedCallback = useRef<typeof callback>()
+
+  // Remember the latest callback.
+  useEffect(() => {
+    savedCallback.current = callback
+  }, [callback])
+
+  // Set up the interval.
+  useEffect(() => {
+    function tick () {
+      savedCallback.current?.()
+    }
+    if (delay !== null) {
+      const id = setInterval(tick, delay)
+      return () => clearInterval(id)
+    }
+  }, [delay])
+}
+
+const styles = {
+  statusBadge: css({
+    marginBottom: tokens.spacingS,
+    minWidth: '100%',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'space-between'
+  })
+}
+
 const Sidebar = () => {
+  const sdk = useSDK<SidebarAppSDK>()
   const [invalidLinks, setInvalidLinks] = useState<InvalidLinkError[]>([])
   const [trackedFields, setTrackedFields] = useState<TrackedFieldState>({})
-  const sdk = useSDK<SidebarAppSDK>()
+  const [entityStatus, setEntityStatus] = useState<EntityStatus>(getEntityStatus(sdk.entry.getSys()))
+  const [isLoading, setIsLoading] = useState<boolean>(true)
+  const [entityValidationId, setEntityValidationId] = useState<string | undefined>()
+  const [entityValidationMsg, setEntityValidationMsg] = useState<string | undefined>()
+
+  const handleBulkValidate = useCallback(async () => {
+    if (entityValidationId) {
+      const validationResults = await sdk.cma.bulkAction.get({
+        spaceId: sdk.ids.space,
+        environmentId: sdk.ids.environment,
+        bulkActionId: entityValidationId
+      })
+
+      if (validationResults.error) {
+        setEntityValidationMsg(validationResults.error.message)
+      } else {
+        setEntityValidationMsg(undefined)
+      }
+      setEntityValidationId(undefined)
+    } else {
+      const { sys: { id } } = await sdk.cma.bulkAction.validate(
+        {
+          spaceId: sdk.ids.space,
+          environmentId: sdk.ids.environment
+        },
+        {
+          entities: {
+            items: [{
+              sys: {
+                id: sdk.ids.entry,
+                linkType: 'Entry',
+                type: 'Link'
+              }
+            }]
+          }
+        }
+      )
+      setEntityValidationId(id)
+    }
+  }, [entityValidationId, sdk.cma.bulkAction, sdk.ids.entry, sdk.ids.environment, sdk.ids.space])
+
+  useInterval(handleBulkValidate, 5000)
 
   useEffect(() => {
+    handleBulkValidate()
     const init = Object.values(sdk.entry.fields).reduce((acc, field) => {
       if (field.type === LINK_CONTENT_TYPE ||
         (field.type === ARRAY_CONTENT_TYPE && field.items.type === LINK_CONTENT_TYPE)
@@ -93,11 +205,19 @@ const Sidebar = () => {
 
     setTrackedFields(init.state)
 
+    const removeOnSysChanged = sdk.entry.onSysChanged((sys) => {
+      const newStatus = getEntityStatus(sys)
+      setEntityStatus(newStatus)
+      handleBulkValidate()
+    })
+
+    setIsLoading(false)
     return () => {
+      removeOnSysChanged()
       init.teardownHandlers.forEach((t: () => void) => { t() })
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [])
+  }, [sdk])
 
   useEffect(() => {
     const trackedFieldsArray = Object.values(trackedFields).flat()
@@ -107,31 +227,53 @@ const Sidebar = () => {
           if (meta) return getInvalidLink(meta, sdk)
         })
       )
-      setInvalidLinks(results.filter(Boolean) as InvalidLinkError[])
+      const newInvalidLinksState = results.filter(Boolean) as InvalidLinkError[]
+      setInvalidLinks(newInvalidLinksState)
     }
+
     revalidateFields()
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [sdk, trackedFields])
 
-  if (invalidLinks.length) {
-    return (
-      <Note css={css({ marginBottom: '12px' })} variant='negative'>
-        The following validation errors have occurred
-        <List>
-          {invalidLinks.map(({ message }, index) => (
-            <ListItem key={index}>
-              {message}
-            </ListItem>
-          ))}
-        </List>
-      </Note>
-    )
-  }
-  return (
-    <Note css={css({ marginBottom: '12px' })} variant='positive'>
-      Contentful Publish Protect
-    </Note>
-  )
+  useEffect(() => {
+    sdk.window.startAutoResizer()
+  }, [sdk.window, invalidLinks])
+
+  const isInvalid = isLoading || invalidLinks.length > 0 || !!entityValidationMsg
+  return isLoading
+    ? (
+      <SkeletonContainer>
+        <SkeletonDisplayText />
+        <SkeletonImage height='100%' offsetTop={37} width='100%' />
+      </SkeletonContainer>
+      )
+    : (
+      <FormControl as='div' css={css({ minHeight: '200px' })} isInvalid={isInvalid}>
+        <div css={styles.statusBadge}>
+          <Text css={css({ color: tokens.gray600 })}>
+            Current Status
+          </Text>
+          <EntityStatusBadge entityStatus={entityStatus} />
+        </div>
+        <PublishButton
+          isDisabled={isInvalid}
+          sdk={sdk}
+          status={entityStatus}
+        />
+        {entityValidationMsg
+          ? (
+            <FormControl.ValidationMessage>
+              {entityValidationMsg}
+            </FormControl.ValidationMessage>
+            )
+          : null}
+        {invalidLinks.map(({ message }, index) => (
+          <FormControl.ValidationMessage key={index}>
+            {message}
+          </FormControl.ValidationMessage>
+        ))}
+      </FormControl>
+      )
 }
 
 export default Sidebar

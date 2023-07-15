@@ -2,79 +2,141 @@
 
 import React, { useCallback, useState, useEffect } from 'react'
 
-import { ConfigAppSDK } from '@contentful/app-sdk'
-import { Heading, Form, Paragraph, Flex } from '@contentful/f36-components'
+import { AppState, ConfigAppSDK } from '@contentful/app-sdk'
+import { Heading, Form, Paragraph, Checkbox } from '@contentful/f36-components'
+import tokens from '@contentful/f36-tokens'
 import { useSDK } from '@contentful/react-apps-toolkit'
 import { css } from '@emotion/react'
 
 export interface AppInstallationParameters {
-  foo?: string
+  contentTypes: string[]
+}
+
+const styles = {
+  body: css({
+    height: 'auto',
+    minHeight: '65vh',
+    margin: '0 auto',
+    marginTop: tokens.spacingXl,
+    padding: `${tokens.spacingXl} ${tokens.spacing2Xl}`,
+    maxWidth: tokens.contentWidthText,
+    backgroundColor: tokens.colorWhite,
+    zIndex: 2,
+    boxShadow: '0px 0px 20px rgba(0, 0, 0, 0.1)',
+    borderRadius: '2px'
+  })
 }
 
 const ConfigScreen = () => {
-  const [parameters, setParameters] = useState<AppInstallationParameters>({})
+  const [parameters, setParameters] = useState<AppInstallationParameters>({ contentTypes: [] })
+  const [availableContentTypes, setAvailableContentTypes] = useState<Record<'id' | 'name', string>[]>([])
   const sdk = useSDK<ConfigAppSDK>()
 
   const onConfigure = useCallback(async () => {
-    /*
-     * This method will be called when a user clicks on "Install"
-     * or "Save" in the configuration screen.
-     * for more details see https://www.contentful.com/developers/docs/extensibility/ui-extensions/sdk-reference/#register-an-app-configuration-hook
-     */
-
-    /*
-     * Get current the state of EditorInterface and other entities
-     * related to this app installation
-     */
     const currentState = await sdk.app.getCurrentState()
 
+    const selectedCTs = parameters.contentTypes.reduce((acc, ctId) => {
+      acc[ctId] = {
+        sidebar: { position: 0 }
+      }
+      return acc
+    }, {} as AppState['EditorInterface'])
+
+    // Remove publish button from sidebar.
+    await Promise.all(parameters.contentTypes.map(async (contentTypeId) => {
+      const ei = await sdk.cma.editorInterface.get({ contentTypeId })
+      const sidebar = (ei.sidebar ?? []).map((widget) => ({
+        ...widget,
+        disabled: widget.widgetId === 'publication-widget'
+      }))
+      return sdk.cma.editorInterface.update({ contentTypeId }, { ...ei, sidebar })
+    }))
+
     return {
-      // Parameters to be persisted as the app configuration.
       parameters,
-      /*
-       * In case you don't want to submit any update to app
-       * locations, you can just pass the currentState as is
-       */
-      targetState: currentState
+      targetState: {
+        EditorInterface: {
+          ...currentState?.EditorInterface,
+          ...selectedCTs
+        }
+      }
     }
   }, [parameters, sdk])
 
   useEffect(() => {
-    /*
-     * `onConfigure` allows to configure a callback to be
-     * invoked when a user attempts to install the app or update
-     * its configuration.
-     */
     sdk.app.onConfigure(() => onConfigure())
   }, [sdk, onConfigure])
 
   useEffect(() => {
     (async () => {
-      /*
-       * Get current parameters of the app.
-       * If the app is not installed yet, `parameters` will be `null`.
-       */
-      const currentParameters: AppInstallationParameters | null = await sdk.app.getParameters()
+      const cts = await sdk.cma.contentType.getMany({
+        spaceId: sdk.ids.space,
+        environmentId: sdk.ids.environment
+      })
 
-      if (currentParameters) {
-        setParameters(currentParameters)
-      }
+      setAvailableContentTypes(cts.items.map(({ sys, name }) => ({ id: sys.id, name })))
 
-      /*
-       * Once preparation has finished, call `setReady` to hide
-       * the loading screen and present the app to a user.
-       */
+      const editorInterfaces = await sdk.cma.editorInterface.getMany({
+        spaceId: sdk.ids.space,
+        environmentId: sdk.ids.environment
+      })
+
+      const assignedCts = editorInterfaces.items.reduce((acc, ei) => {
+        if (ei.sidebar?.some((widget) => (
+          widget.widgetId === sdk.ids.app && widget.widgetNamespace === 'app'
+        ))) {
+          acc.push(ei.sys.contentType.sys.id)
+        }
+        return acc
+      }, [] as string[])
+
+      const {
+        contentTypes = [],
+        ...restParams
+      }: AppInstallationParameters = await sdk.app.getParameters() ?? parameters
+
+      setParameters({
+        ...restParams,
+        contentTypes: assignedCts ?? contentTypes
+      })
       sdk.app.setReady()
     })()
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [sdk])
 
+  const handleCtSelect = (value: string, isChecked: boolean) => {
+    setParameters({
+      ...parameters,
+      contentTypes: !isChecked
+        ? parameters.contentTypes.concat([value])
+        : parameters.contentTypes.filter((ctId) => ctId !== value)
+    })
+  }
+
   return (
-    <Flex css={css({ margin: '80px', maxWidth: '800px' })} flexDirection="column">
-      <Form>
-        <Heading>App Config</Heading>
-        <Paragraph>Welcome to your contentful app. This is your config page.</Paragraph>
+    <div css={styles.body}>
+      <Form css={css({ margin: 'auto', width: 'fit-content' })}>
+        <Heading>Contentful Publish Protect</Heading>
+        <Paragraph>Select the content types that will be using this app</Paragraph>
+        {availableContentTypes.map(({ id, name }) => {
+          const isChecked = parameters.contentTypes.includes(id)
+          return (
+            <Checkbox
+              key={id}
+              isChecked={isChecked}
+              css={css({
+                margin: tokens.spacingM
+              })}
+              onChange={() => {
+                handleCtSelect(id, isChecked)
+              }}
+            >
+              {name}
+            </Checkbox>
+          )
+        })}
       </Form>
-    </Flex>
+    </div>
   )
 }
 
