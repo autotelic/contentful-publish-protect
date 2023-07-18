@@ -4,7 +4,7 @@ import React, { useState } from 'react'
 
 import { SidebarAppSDK } from '@contentful/app-sdk'
 import { Button, Caption, EntityStatus, IconButton, Popover } from '@contentful/f36-components'
-import { ChevronDownIcon } from '@contentful/f36-icons'
+import { ChevronDownIcon, ClockIcon } from '@contentful/f36-icons'
 import tokens from '@contentful/f36-tokens'
 import { css } from '@emotion/react'
 
@@ -12,6 +12,7 @@ interface Props {
   isDisabled: boolean
   status: EntityStatus
   sdk: SidebarAppSDK
+  openScheduleDialog: () => Promise<void>
 }
 
 const styles = {
@@ -63,7 +64,8 @@ const publishButtonText: Record<EntityStatus, string> = {
 function PublishButton ({
   isDisabled,
   status,
-  sdk
+  sdk,
+  openScheduleDialog
 }: Props) {
   const [isOpen, setIsOpen] = useState<boolean>(false)
 
@@ -179,16 +181,10 @@ function PublishButton ({
                   </Button>
                   <Button
                     css={styles.popoverButtons}
+                    startIcon={<ClockIcon variant='muted' />}
                     variant='transparent'
                     isFullWidth
-                    onClick={() => sdk.dialogs.openCurrentApp({
-                      title: 'Set Schedule',
-                      allowHeightOverflow: true,
-                      shouldCloseOnOverlayClick: true,
-                      shouldCloseOnEscapePress: true,
-                      width: 'medium',
-                      parameters: { entryId: sdk.ids.entry }
-                    })}
+                    onClick={openScheduleDialog}
                   >
                     Set Schedule
                   </Button>

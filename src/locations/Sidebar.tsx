@@ -3,13 +3,16 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react'
 
 import { EntryFieldAPI, EntrySys, SidebarAppSDK } from '@contentful/app-sdk'
-import { SkeletonContainer, SkeletonDisplayText, SkeletonImage, EntityStatus, EntityStatusBadge, FormControl, Text } from '@contentful/f36-components'
+import { SkeletonContainer, SkeletonDisplayText, SkeletonImage, EntityStatus, EntityStatusBadge, FormControl, Text, SectionHeading, formatDateAndTime } from '@contentful/f36-components'
 import tokens from '@contentful/f36-tokens'
 import { useSDK } from '@contentful/react-apps-toolkit'
 import { css } from '@emotion/react'
-import { EntityMetaSysProps, SysLink } from 'contentful-management'
+import { EntityMetaSysProps, ScheduledActionProps, SysLink } from 'contentful-management'
 
 import PublishButton from '../components/PublishButton'
+import ScheduledActionCard from '../components/ScheduledActionCard'
+
+import { DialogueInvocationParams } from './Dialogue'
 
 const LINK_CONTENT_TYPE = 'Link'
 const ASSET_CONTENT_TYPE = 'Asset'
@@ -139,6 +142,7 @@ const Sidebar = () => {
   const [isLoading, setIsLoading] = useState<boolean>(true)
   const [entityValidationId, setEntityValidationId] = useState<string | undefined>()
   const [entityValidationMsg, setEntityValidationMsg] = useState<string | undefined>()
+  const [scheduledActions, setScheduledActions] = useState<ScheduledActionProps[]>([])
 
   const handleBulkValidate = useCallback(async () => {
     if (entityValidationId) {
@@ -178,6 +182,18 @@ const Sidebar = () => {
 
   useInterval(handleBulkValidate, 5000)
 
+  const getScheduledActions = useCallback(async () => {
+    const payload = await sdk.cma.scheduledActions.getMany({
+      environmentId: sdk.ids.environment,
+      spaceId: sdk.ids.space,
+      query: {
+        'entity.sys.id': sdk.ids.entry,
+        'environment.sys.id': sdk.ids.environment
+      }
+    })
+    setScheduledActions(payload.items.filter(({ sys }) => sys.status === 'scheduled'))
+  }, [sdk])
+
   useEffect(() => {
     handleBulkValidate()
     const init = Object.values(sdk.entry.fields).reduce((acc, field) => {
@@ -208,6 +224,7 @@ const Sidebar = () => {
     const removeOnSysChanged = sdk.entry.onSysChanged((sys) => {
       const newStatus = getEntityStatus(sys)
       setEntityStatus(newStatus)
+      getScheduledActions()
       handleBulkValidate()
     })
 
@@ -239,6 +256,47 @@ const Sidebar = () => {
     sdk.window.startAutoResizer()
   }, [sdk.window, invalidLinks])
 
+  const cancelScheduledAction = async (action: ScheduledActionProps) => {
+    try {
+      const isConfirmed = await sdk.dialogs.openConfirm({
+        title: 'Cancel Schedule?',
+        cancelLabel: 'Close',
+        confirmLabel: 'Cancel the schedule',
+        intent: 'negative',
+        message: `This Entry is scheduled to publish on ${formatDateAndTime(action.scheduledFor.datetime, 'full')}.
+      Are you sure you want to cancel?`
+      })
+      if (isConfirmed) {
+        await sdk.cma.scheduledActions.delete({
+          spaceId: sdk.ids.space,
+          environmentId: sdk.ids.environment,
+          scheduledActionId: action.sys.id
+        })
+        sdk.notifier.warning('Scheduled action canceled')
+      }
+    } catch (error) {
+      sdk.notifier.error('Unable to cancel scheduled action')
+    } finally {
+      await getScheduledActions()
+    }
+  }
+
+  const openScheduleDialog = useCallback(async (action?: ScheduledActionProps) => {
+    const parameters: DialogueInvocationParams = { entryId: sdk.ids.entry }
+    if (typeof action === 'object') parameters.action = action
+    const isScheduled = await sdk.dialogs.openCurrentApp({
+      title: 'Set Schedule',
+      allowHeightOverflow: true,
+      shouldCloseOnOverlayClick: true,
+      shouldCloseOnEscapePress: true,
+      width: 'medium',
+      parameters
+    })
+    if (isScheduled) {
+      await getScheduledActions()
+    }
+  }, [sdk, getScheduledActions])
+
   const isInvalid = isLoading || invalidLinks.length > 0 || !!entityValidationMsg
   return isLoading
     ? (
@@ -248,15 +306,16 @@ const Sidebar = () => {
       </SkeletonContainer>
       )
     : (
-      <FormControl as='div' css={css({ minHeight: '200px' })} isInvalid={isInvalid}>
+      <FormControl as='div' css={css({ minHeight: '212px' })} isInvalid={isInvalid}>
         <div css={styles.statusBadge}>
           <Text css={css({ color: tokens.gray600 })}>
-            Current Status
+            Status
           </Text>
-          <EntityStatusBadge entityStatus={entityStatus} />
+          <EntityStatusBadge entityStatus={entityStatus} isScheduled={scheduledActions.length > 0} />
         </div>
         <PublishButton
           isDisabled={isInvalid}
+          openScheduleDialog={openScheduleDialog}
           sdk={sdk}
           status={entityStatus}
         />
@@ -272,6 +331,25 @@ const Sidebar = () => {
             {message}
           </FormControl.ValidationMessage>
         ))}
+        {scheduledActions.length > 0
+          ? (
+            <div css={css({ marginTop: tokens.spacingM })}>
+              <SectionHeading css={css({ borderBottom: `1px solid ${tokens.gray400}`, color: tokens.gray500 })}>
+                Current Schedule
+              </SectionHeading>
+              <div css={css({ display: 'flex', flexDirection: 'column', gap: tokens.spacing2Xs })}>
+                {scheduledActions.map((action) => (
+                  <ScheduledActionCard
+                    key={action.sys.id}
+                    action={action}
+                    handleCancel={() => cancelScheduledAction(action)}
+                    handleEdit={() => openScheduleDialog(action)}
+                  />
+                ))}
+              </div>
+            </div>
+            )
+          : null}
       </FormControl>
       )
 }
