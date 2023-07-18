@@ -168,14 +168,31 @@ function PublishButton ({
               : null}
             {status !== 'archived'
               ? (
-                <Button
-                  css={styles.popoverButtons}
-                  variant='transparent'
-                  isFullWidth
-                  onClick={handleArchive}
-                >
-                  Archive
-                </Button>
+                <>
+                  <Button
+                    css={styles.popoverButtons}
+                    variant='transparent'
+                    isFullWidth
+                    onClick={handleArchive}
+                  >
+                    Archive
+                  </Button>
+                  <Button
+                    css={styles.popoverButtons}
+                    variant='transparent'
+                    isFullWidth
+                    onClick={() => sdk.dialogs.openCurrentApp({
+                      title: 'Set Schedule',
+                      allowHeightOverflow: true,
+                      shouldCloseOnOverlayClick: true,
+                      shouldCloseOnEscapePress: true,
+                      width: 'medium',
+                      parameters: { entryId: sdk.ids.entry }
+                    })}
+                  >
+                    Set Schedule
+                  </Button>
+                </>
                 )
               : null}
           </div>

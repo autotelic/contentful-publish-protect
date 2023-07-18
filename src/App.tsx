@@ -4,10 +4,12 @@ import { locations } from '@contentful/app-sdk'
 import { useSDK } from '@contentful/react-apps-toolkit'
 
 import ConfigScreen from './locations/ConfigScreen'
+import Dialogue from './locations/Dialogue'
 import Sidebar from './locations/Sidebar'
 
 const ComponentLocationSettings = {
   [locations.LOCATION_APP_CONFIG]: ConfigScreen,
+  [locations.LOCATION_DIALOG]: Dialogue,
   [locations.LOCATION_ENTRY_SIDEBAR]: Sidebar
 }
 
