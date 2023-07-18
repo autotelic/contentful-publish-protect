@@ -83,14 +83,36 @@ function PublishButton ({
     }
   }
 
+  const createEntryUrl = (entryId: string) => (
+    new URL(
+      `/spaces/${sdk.ids.space}/environments/${sdk.ids.environment}/entries/${entryId}`,
+      'https://app.contentful.com'
+    ).toString()
+  )
+
   const handleUnpublish = async () => {
     try {
       if (status === 'archived') {
         await sdk.entry.publish({ skipUiValidation: false })
         sdk.notifier.success('Entry published')
       } else {
-        await sdk.entry.unpublish()
-        sdk.notifier.warning('Entry unpublished')
+        const linksToEntry = await sdk.cma.entry.getMany({
+          spaceId: sdk.ids.space,
+          environmentId: sdk.ids.environment,
+          query: { links_to_entry: sdk.ids.entry }
+        })
+
+        if (linksToEntry.total > 0) {
+          const linkUrls = linksToEntry.items.map((link) => createEntryUrl(link.sys.id))
+          await sdk.dialogs.openAlert({
+            title: 'Unable to unpublish entry',
+            message: `This entry must have all references to it removed from the following entries:\n${linkUrls.join('\n')}`,
+            confirmLabel: 'Close'
+          })
+        } else {
+          await sdk.entry.unpublish()
+          sdk.notifier.warning('Entry unpublished')
+        }
       }
     } catch (error) {
       sdk.notifier.error((error as Error).message)
@@ -99,20 +121,34 @@ function PublishButton ({
 
   const handleArchive = async () => {
     try {
-      const shouldArchive = await sdk.dialogs.openConfirm({
-        confirmLabel: 'Yes, archive entry',
-        title: 'Are you sure?',
-        // TODO(HW13): Lookup linked entries and list, like the default behaviour
-        message: 'This will impact any entries referencing this one',
-        intent: 'negative'
+      const linksToEntry = await sdk.cma.entry.getMany({
+        spaceId: sdk.ids.space,
+        environmentId: sdk.ids.environment,
+        query: { links_to_entry: sdk.ids.entry }
       })
-      if (shouldArchive) {
-        // The default publish button does this too...
-        if (PUBLISHED_STATUSES.includes(status)) {
-          await sdk.entry.unpublish()
+
+      if (linksToEntry.total > 0) {
+        const linkUrls = linksToEntry.items.map((link) => createEntryUrl(link.sys.id))
+        await sdk.dialogs.openAlert({
+          title: 'Unable to archive entry',
+          message: `This entry must have all references to it removed from the following entries:\n${linkUrls.join('\n')}`,
+          confirmLabel: 'Close'
+        })
+      } else {
+        const shouldArchive = await sdk.dialogs.openConfirm({
+          confirmLabel: 'Yes, archive entry',
+          title: 'Are you sure?',
+          message: 'This will impact any entries referencing this one',
+          intent: 'negative'
+        })
+        if (shouldArchive) {
+          // The default publish button does this too...
+          if (PUBLISHED_STATUSES.includes(status)) {
+            await sdk.entry.unpublish()
+          }
+          await sdk.cma.entry.archive({ entryId: sdk.ids.entry })
+          sdk.notifier.success('Entry archived')
         }
-        await sdk.cma.entry.archive({ entryId: sdk.ids.entry })
-        sdk.notifier.success('Entry archived')
       }
     } catch (error) {
       sdk.notifier.error((error as Error).message)
@@ -181,6 +217,7 @@ function PublishButton ({
                   </Button>
                   <Button
                     css={styles.popoverButtons}
+                    isDisabled={isDisabled}
                     startIcon={<ClockIcon variant='muted' />}
                     variant='transparent'
                     isFullWidth
