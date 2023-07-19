@@ -1,6 +1,6 @@
 /** @jsxImportSource @emotion/react */
 
-import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react'
+import React, { useState, useEffect, useCallback, useMemo } from 'react'
 
 import { EntryFieldAPI, EntrySys, SidebarAppSDK } from '@contentful/app-sdk'
 import {
@@ -13,6 +13,7 @@ import {
 import { useSDK } from '@contentful/react-apps-toolkit'
 import { css } from '@emotion/react'
 import { EntityMetaSysProps, ScheduledActionProps, SysLink } from 'contentful-management'
+import throttle from 'lodash.throttle'
 
 import AppDetailsSection from './components/AppDetailsSection'
 import IssuesSection from './components/IssuesSection'
@@ -109,74 +110,17 @@ async function getInvalidLink (
   }
 }
 
-function useInterval (callback: () => void | Promise<void>, delay: number) {
-  const savedCallback = useRef<typeof callback>()
-
-  // Remember the latest callback.
-  useEffect(() => {
-    savedCallback.current = callback
-  }, [callback])
-
-  // Set up the interval.
-  useEffect(() => {
-    function tick () {
-      savedCallback.current?.()
-    }
-    if (delay !== null) {
-      const id = setInterval(tick, delay)
-      return () => clearInterval(id)
-    }
-  }, [delay])
-}
-
 const Sidebar = () => {
   const sdk = useSDK<SidebarAppSDK>()
   const [invalidLinks, setInvalidLinks] = useState<InvalidLinkError[]>([])
   const [trackedFields, setTrackedFields] = useState<TrackedFieldState>({})
   const [entityStatus, setEntityStatus] = useState<EntityStatus>(getEntityStatus(sdk.entry.getSys()))
   const [isLoading, setIsLoading] = useState<boolean>(true)
+  const [isValidating, setIsValidating] = useState<boolean>(false)
   const [entityValidationId, setEntityValidationId] = useState<string | undefined>()
   const [entityValidationMsg, setEntityValidationMsg] = useState<string | undefined>()
   const [scheduledActions, setScheduledActions] = useState<ScheduledActionProps[]>([])
   const [lastSavedAt, setLastSavedAt] = useState<string>()
-
-  const handleBulkValidate = useCallback(async () => {
-    if (entityValidationId) {
-      const validationResults = await sdk.cma.bulkAction.get({
-        spaceId: sdk.ids.space,
-        environmentId: sdk.ids.environment,
-        bulkActionId: entityValidationId
-      })
-
-      if (validationResults.error) {
-        setEntityValidationMsg(validationResults.error.message)
-      } else {
-        setEntityValidationMsg(undefined)
-      }
-      setEntityValidationId(undefined)
-    } else {
-      const { sys: { id } } = await sdk.cma.bulkAction.validate(
-        {
-          spaceId: sdk.ids.space,
-          environmentId: sdk.ids.environment
-        },
-        {
-          entities: {
-            items: [{
-              sys: {
-                id: sdk.ids.entry,
-                linkType: 'Entry',
-                type: 'Link'
-              }
-            }]
-          }
-        }
-      )
-      setEntityValidationId(id)
-    }
-  }, [entityValidationId, sdk.cma.bulkAction, sdk.ids.entry, sdk.ids.environment, sdk.ids.space])
-
-  useInterval(handleBulkValidate, 5000)
 
   const getScheduledActions = useCallback(async () => {
     const payload = await sdk.cma.scheduledActions.getMany({
@@ -190,8 +134,56 @@ const Sidebar = () => {
     setScheduledActions(payload.items.filter(({ sys }) => sys.status === 'scheduled'))
   }, [sdk])
 
+  const handleBulkValidate = useMemo(() => throttle(
+    async () => {
+      if (!entityValidationId) {
+        setIsValidating(true)
+        await sdk.entry.save()
+        const { sys: { id } } = await sdk.cma.bulkAction.validate(
+          {
+            spaceId: sdk.ids.space,
+            environmentId: sdk.ids.environment
+          },
+          {
+            entities: {
+              items: [{
+                sys: {
+                  id: sdk.ids.entry,
+                  linkType: 'Entry',
+                  type: 'Link'
+                }
+              }]
+            }
+          }
+        )
+        setEntityValidationId(id)
+      }
+    }, 300, { trailing: true, leading: false }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  ), [entityValidationId])
+
   useEffect(() => {
-    handleBulkValidate().then(() => handleBulkValidate())
+    const checkValidationResults = async () => {
+      if (entityValidationId) {
+        const validationResults = await sdk.cma.bulkAction.get({
+          spaceId: sdk.ids.space,
+          environmentId: sdk.ids.environment,
+          bulkActionId: entityValidationId
+        })
+        if (validationResults.error) {
+          setEntityValidationMsg(validationResults.error.message)
+        } else {
+          setEntityValidationMsg(undefined)
+        }
+        setEntityValidationId(undefined)
+        setIsValidating(false)
+      }
+    }
+    checkValidationResults()
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [entityValidationId])
+
+  useEffect(() => {
     const init = Object.values(sdk.entry.fields).reduce((acc, field) => {
       if (field.type === LINK_CONTENT_TYPE ||
         (field.type === ARRAY_CONTENT_TYPE && field.items.type === LINK_CONTENT_TYPE)
@@ -206,7 +198,11 @@ const Sidebar = () => {
             ...trackedFields,
             [field.id]: value ? getLinkMeta(field, value) : []
           })
+          handleBulkValidate()
         })
+        acc.teardownHandlers.push(teardownHandler)
+      } else {
+        const teardownHandler = field.onValueChanged(handleBulkValidate)
         acc.teardownHandlers.push(teardownHandler)
       }
       return acc
@@ -223,7 +219,7 @@ const Sidebar = () => {
       setEntityStatus(newStatus)
       setLastSavedAt(updatedAt)
       getScheduledActions()
-      handleBulkValidate().then(() => handleBulkValidate())
+      handleBulkValidate()
     })
 
     setIsLoading(false)
@@ -232,11 +228,12 @@ const Sidebar = () => {
       init.teardownHandlers.forEach((t: () => void) => { t() })
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [sdk])
+  }, [getScheduledActions, sdk])
 
   useEffect(() => {
     const trackedFieldsArray = Object.values(trackedFields).flat()
     const revalidateFields = async () => {
+      setIsValidating(true)
       const results = await Promise.all(
         trackedFieldsArray.map(async (meta) => {
           if (meta) return getInvalidLink(meta, sdk)
@@ -244,6 +241,7 @@ const Sidebar = () => {
       )
       const newInvalidLinksState = results.filter(Boolean) as InvalidLinkError[]
       setInvalidLinks(newInvalidLinksState)
+      setIsValidating(false)
     }
 
     revalidateFields()
@@ -277,6 +275,7 @@ const Sidebar = () => {
           entityStatus={entityStatus}
           isActionScheduled={scheduledActions.length > 0}
           isInvalid={isInvalid}
+          isValidating={isValidating}
           lastSavedAt={lastSavedAt}
           triggerScheduleUpdate={getScheduledActions}
         />

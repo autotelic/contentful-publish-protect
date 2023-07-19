@@ -10,6 +10,7 @@ import { css } from '@emotion/react'
 
 interface Props {
   isDisabled: boolean
+  isValidating: boolean
   status: EntityStatus
   sdk: SidebarAppSDK
   openScheduleDialog: () => Promise<void>
@@ -64,6 +65,7 @@ const publishButtonText: Record<EntityStatus, string> = {
 
 function PublishButton ({
   isDisabled,
+  isValidating,
   status,
   sdk,
   openScheduleDialog
@@ -170,11 +172,12 @@ function PublishButton ({
               className={status === 'published' ? 'popover' : ''}
               css={styles.publishButton}
               endIcon={status === 'published' ? <ChevronDownIcon /> : undefined}
-              isDisabled={['published', 'archived'].includes(status) ? false : isDisabled}
+              isDisabled={['published', 'archived'].includes(status) ? false : (isDisabled || isValidating)}
+              isLoading={isValidating}
               variant='positive'
               onClick={status === 'published' ? () => setIsOpen(!isOpen) : handlePublish}
             >
-              {publishButtonText[status]}
+              {isValidating ? 'Validating' : publishButtonText[status]}
             </Button>
           </div>
         </Popover.Trigger>

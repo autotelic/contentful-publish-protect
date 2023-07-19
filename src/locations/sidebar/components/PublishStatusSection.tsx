@@ -21,6 +21,7 @@ interface Props {
   entityStatus: EntityStatus
   isActionScheduled: boolean
   isInvalid: boolean
+  isValidating: boolean
   lastSavedAt?: string
   triggerScheduleUpdate: () => Promise<void>
 }
@@ -43,6 +44,7 @@ const PublishStatusSection = ({
   entityStatus,
   isActionScheduled,
   isInvalid,
+  isValidating,
   lastSavedAt,
   triggerScheduleUpdate
 }: Props) => {
@@ -74,6 +76,7 @@ const PublishStatusSection = ({
       </div>
       <PublishButton
         isDisabled={isInvalid}
+        isValidating={isValidating}
         openScheduleDialog={openScheduleDialog}
         sdk={sdk}
         status={entityStatus}
