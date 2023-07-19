@@ -18,19 +18,20 @@ interface Props {
 const styles = {
   container: css({
     marginBottom: tokens.spacingS,
+    marginTop: tokens.spacingS,
     width: '327px',
     height: '40px',
     display: 'flex',
     borderRadius: tokens.borderRadiusMedium,
     alignItems: 'center',
-    justifyContent: 'center',
+    justifyContent: 'flex-start',
     '.popover': {
       borderRadius: tokens.borderRadiusMedium
     }
   }),
   publishButton: css({
-    minWidth: '100%',
-    borderRadius: `${tokens.borderRadiusMedium} 0px 0px ${tokens.borderRadiusMedium}`
+    borderRadius: `${tokens.borderRadiusMedium} 0px 0px ${tokens.borderRadiusMedium}`,
+    minWidth: '100%'
   }),
   popoverTriggerButton: css({
     width: '51px',
@@ -157,20 +158,26 @@ function PublishButton ({
 
   return (
     <div css={styles.container}>
-      <div css={css({ width: '100%' })}>
-        <Button
-          className={status === 'published' ? 'popover' : ''}
-          css={styles.publishButton}
-          endIcon={status === 'published' ? <ChevronDownIcon /> : undefined}
-          isDisabled={['published', 'archived'].includes(status) ? false : isDisabled}
-          variant='positive'
-          onClick={status === 'published' ? () => setIsOpen(!isOpen) : handlePublish}
-        >
-          {publishButtonText[status]}
-        </Button>
-
-      </div>
-      <Popover isOpen={isOpen} onClose={() => setIsOpen(false)}>
+      <Popover
+        isAutoalignmentEnabled={false}
+        isOpen={isOpen}
+        placement='bottom-end'
+        onClose={() => setIsOpen(false)}
+      >
+        <Popover.Trigger>
+          <div css={css({ width: '100%' })}>
+            <Button
+              className={status === 'published' ? 'popover' : ''}
+              css={styles.publishButton}
+              endIcon={status === 'published' ? <ChevronDownIcon /> : undefined}
+              isDisabled={['published', 'archived'].includes(status) ? false : isDisabled}
+              variant='positive'
+              onClick={status === 'published' ? () => setIsOpen(!isOpen) : handlePublish}
+            >
+              {publishButtonText[status]}
+            </Button>
+          </div>
+        </Popover.Trigger>
         {
           status === 'published'
             ? null
@@ -221,7 +228,7 @@ function PublishButton ({
                     startIcon={<ClockIcon variant='muted' />}
                     variant='transparent'
                     isFullWidth
-                    onClick={openScheduleDialog}
+                    onClick={() => openScheduleDialog()}
                   >
                     Set Schedule
                   </Button>

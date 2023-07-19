@@ -8,9 +8,7 @@ import tokens from '@contentful/f36-tokens'
 import { useSDK } from '@contentful/react-apps-toolkit'
 import { css } from '@emotion/react'
 
-export interface AppInstallationParameters {
-  contentTypes: string[]
-}
+import { AppInstallationParameters } from '../../types'
 
 const styles = {
   body: css({

@@ -58,7 +58,12 @@ const ScheduledActionCard = ({ action, handleEdit, handleCancel }: Props) => {
             </Badge>
           </div>
         </div>
-        <Popover isOpen={isMenuOpen} onClose={() => setIsMenuOpen(false)}>
+        <Popover
+          isAutoalignmentEnabled={false}
+          isOpen={isMenuOpen}
+          placement='bottom-end'
+          onClose={() => setIsMenuOpen(false)}
+        >
           <Popover.Trigger>
             <IconButton
               aria-label='action menu'

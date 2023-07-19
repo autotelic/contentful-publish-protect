@@ -22,19 +22,13 @@ import tokens from '@contentful/f36-tokens'
 import { useSDK } from '@contentful/react-apps-toolkit'
 import { css } from '@emotion/react'
 import { KeyValueMap } from 'contentful-management'
-import { CreateUpdateScheduledActionProps, ScheduledActionProps } from 'contentful-management/dist/typings/entities/scheduled-action'
+import { CreateUpdateScheduledActionProps } from 'contentful-management/dist/typings/entities/scheduled-action'
 
-import { scheduleTimes } from '../components/constants/scheduleTimes'
-import { timezones } from '../components/constants/timezones'
+import { scheduleTimes } from '../../constants/scheduleTimes'
+import { timezones } from '../../constants/timezones'
+import { AppDialogueInvocationParams } from '../../types'
 
-export interface DialogueInvocationParams {
-  entryId: string
-  action?: ScheduledActionProps
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  [key: string]: any
-}
-
-type SDK = DialogAppSDK<KeyValueMap, DialogueInvocationParams>
+type SDK = DialogAppSDK<KeyValueMap, AppDialogueInvocationParams>
 
 interface ScheduleActionParams {
   action: 'publish' | 'unpublish'
@@ -138,8 +132,9 @@ function Dialogue () {
   const [scheduledDay, setScheduledDay] = useState<Date | undefined>(new Date())
   const [scheduledTime, setScheduledTime] = useState<string>(getAvailableTimes(new Date())[1])
   const [isTimeSlotsOpen, setTimeSlotsOpen] = useState<boolean>(false)
-  const [isLoading, setLoading] = useState<boolean>(true)
   const [timezone, setTimezone] = useState<string>(timezones[0].value)
+  const [isLoading, setLoading] = useState<boolean>(true)
+  const [isScheduling, setIsScheduling] = useState<boolean>(false)
 
   useEffect(() => {
     sdk.window.startAutoResizer()
@@ -173,6 +168,7 @@ function Dialogue () {
 
   const onScheduleAction = useCallback(async () => {
     try {
+      setIsScheduling(true)
       const payload = createScheduleActionProps({
         action: scheduleAction,
         date: (scheduledDay as Date),
@@ -321,10 +317,9 @@ function Dialogue () {
             </Button>
             <Button
               isDisabled={!isTimeValid}
+              isLoading={isScheduling}
               variant='primary'
-              onClick={() => {
-                onScheduleAction()
-              }}
+              onClick={() => onScheduleAction()}
             >
               Set Schedule
             </Button>
