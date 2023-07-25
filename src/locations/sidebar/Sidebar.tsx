@@ -59,7 +59,7 @@ const getLinkMeta = (field: EntryFieldAPI, link: SysLink) => {
 }
 
 /*
- * These are the Contentfuls recommended ways to determine an entry's status
+ * These are the Contentful's recommended ways to determine an entry's status
  * https://www.contentful.com/developers/docs/tutorials/general/determine-entry-asset-state/
  */
 

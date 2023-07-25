@@ -1,36 +1,72 @@
 # Contentful Publish Protect
 
-This project was bootstrapped with [Create Contentful App](https://github.com/contentful/create-contentful-app).
+## Getting Started
 
-## Available Scripts
+Enable pnpm using [`corepack`](https://nodejs.org/api/corepack.html) (comes preinstalled with versions of Node `>=16`):
 
-In the project directory, you can run:
+```sh
+corepack enable && corepack prepare pnpm@latest --activate
+```
 
-### `pnpm start`
+Install dependencies
 
-Creates or updates your app definition in contentful, and runs the app in development mode.
-Open your app to view it in the browser.
+```sh
+pnpm install
+```
 
-The page will reload if you make edits.
-You will also see any lint errors in the console.
+### Local Development
 
-### `pnpm run build`
+This app has already been installed into Autotelic's "App Testing" org/space. To view changes live on Contentful:
 
-Builds the app for production to the `build` folder.
-It correctly bundles React in production mode and optimizes the build for the best performance.
+- Go to the App Definition page ([here](https://app.contentful.com/account/organizations/71CxCCp0OX0R8JtqEUQzhO/apps/definitions/5Nn9okXg5hzu3uDFz8OsNL/general))
 
-The build is minified and the filenames include the hashes.
-Your app is ready to be deployed!
+- Click the "Open in Dev Mode" button
 
-## Libraries to use
+- In dev mode the app's origin can be changed at the bottom of the page in the footer/toolbox - change this to `http://localhost:3000`
 
-To make your app look and feel like Contentful use the following libraries:
+- In your terminal, start the dev server (`pnpm start`)
 
-- [Forma 36](https://f36.contentful.com/) – Contentful's design system
-- [Contentful Field Editors](https://www.contentful.com/developers/docs/extensibility/field-editors/) – Contentful's field editor React components
+- In the dev mode window navigate to any content entry
 
-## Learn More
+- In the dev mode footer/toolbox beneath the "Render's In" section click the sidebar's "Render" button
 
-[Read more](https://www.contentful.com/developers/docs/extensibility/app-framework/create-contentful-app/) and check out the video on how to use the CLI.
+![Dev Mode Footer](docs/assets/contentful-dev-mode.png)
 
-Create Contentful App uses [Create React App](https://create-react-app.dev/). You can learn more in the [Create React App documentation](https://facebook.github.io/create-react-app/docs/getting-started) and how to further customize your app.
+After following the above steps, any local changes should be reflected in the sidebar app
+
+## App Upload and Installation
+
+On pushes to `main`, a Github workflow will automatically upload this app to our "App Testing" Contentful org/space. All changes should be developed on and implemented in this repo and tested in our "App Testing" space first. If this app needs to be uploaded into another organization, **do not fork this repo into that org**. Instead follow the instructions below
+
+### Adding App to a New Org
+
+1. Create an App Definition
+
+     ```sh
+     pnpm create-app-definition
+     ```
+
+    - Run the above command from the project root, and then follow the prompts to authenticate and configure the app
+
+      - When asked to "Select where your app can be rendered", select `App configuration screen` and `Entry sidebar`
+
+    - The app definition should now be accessible in the org's "Apps" tab
+      - Follow the [Local Development](#local-development) steps above to run the app locally and confirm it all works as expected
+
+    - More details [here](https://www.contentful.com/developers/docs/extensibility/app-framework/create-contentful-app/#creating-an-appdefinition)
+
+2. Build and Upload App
+
+    ```sh
+    pnpm build && pnpm upload
+    ```
+
+    - Run the above command from the project root, and then follow the prompts to authenticate and upload the app to the desired org
+
+    - More details [here](https://www.contentful.com/developers/docs/extensibility/app-framework/create-contentful-app/#deploy-with-contentful)
+
+3. Install and Configure App
+
+    - In the Contentful UI navigate to the desired space within the org the app was uploaded to, and click the "Apps" tab, then click "Custom Apps"
+
+    - Find the contentful-jsonschema-form app and select the install option.JSON-schema forms can be added to existing JSON field types
