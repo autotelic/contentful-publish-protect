@@ -39,6 +39,8 @@ interface InvalidLinkError extends LinkMeta {
 
 type TrackedFieldState = Record<string, LinkMeta[]>
 
+const INVALID_PARAM_KEY = '__invalid'
+
 const getInvalidLinkMsg = (fieldName: string) => (
   `The field "${fieldName}" contains a reference to unpublished content`
 )
@@ -113,6 +115,7 @@ async function getInvalidLink (
 const Sidebar = () => {
   const sdk = useSDK<SidebarAppSDK>()
   const [invalidLinks, setInvalidLinks] = useState<InvalidLinkError[]>([])
+  const [customFieldErrors, setCustomFieldErrors] = useState<string[]>([])
   const [trackedFields, setTrackedFields] = useState<TrackedFieldState>({})
   const [entityStatus, setEntityStatus] = useState<EntityStatus>(getEntityStatus(sdk.entry.getSys()))
   const [isLoading, setIsLoading] = useState<boolean>(true)
@@ -164,6 +167,26 @@ const Sidebar = () => {
 
   useEffect(() => {
     const checkValidationResults = async () => {
+      const { controls = [] } = await sdk.cma.editorInterface.get({
+        environmentId: sdk.ids.environment,
+        spaceId: sdk.ids.space,
+        contentTypeId: sdk.ids.contentType
+      })
+
+      const invalidCustomFields = controls.filter(({ settings = {} }) => (
+        (settings?.[INVALID_PARAM_KEY] as string)?.split(',').includes(sdk.ids.entry))
+      )
+
+      if (invalidCustomFields.length) {
+        const errorMsgs = invalidCustomFields.map(({ fieldId }) => {
+          const fieldName = sdk.entry.fields[fieldId].name
+          return `The field "${fieldName}" is invalid`
+        })
+        setCustomFieldErrors(errorMsgs)
+      } else {
+        setCustomFieldErrors([])
+      }
+
       if (entityValidationId) {
         const validationResults = await sdk.cma.bulkAction.get({
           spaceId: sdk.ids.space,
@@ -252,14 +275,18 @@ const Sidebar = () => {
     sdk.window.startAutoResizer()
   }, [sdk.window, invalidLinks])
 
-  const isInvalid = isLoading || invalidLinks.length > 0 || !!entityValidationMsg
+  const isInvalid = isLoading ||
+    invalidLinks.length > 0 ||
+    !entityValidationMsg ||
+    customFieldErrors.length > 0
 
   const validationMessages: string[] = useMemo(() => (
     [
       ...(entityValidationMsg ? [entityValidationMsg] : []),
-      ...invalidLinks.map(({ message }) => message)
+      ...invalidLinks.map(({ message }) => message),
+      ...customFieldErrors
     ]
-  ), [invalidLinks, entityValidationMsg])
+  ), [invalidLinks, entityValidationMsg, customFieldErrors])
 
   return isLoading
     ? (
