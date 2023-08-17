@@ -101,7 +101,7 @@ async function getInvalidLink (
       ? await sdk.cma.asset.get({ assetId: linkMeta.linkId })
       : await sdk.cma.entry.get({ entryId: linkMeta.linkId })
 
-    if (!isPublished(res.sys)) {
+    if (isDraft(res.sys) || isArchived(res.sys)) {
       return createInvalidLinkError(linkMeta)
     }
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -277,7 +277,7 @@ const Sidebar = () => {
 
   const isInvalid = isLoading ||
     invalidLinks.length > 0 ||
-    !entityValidationMsg ||
+    !!entityValidationMsg ||
     customFieldErrors.length > 0
 
   const validationMessages: string[] = useMemo(() => (
