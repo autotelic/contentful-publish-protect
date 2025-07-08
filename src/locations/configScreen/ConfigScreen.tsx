@@ -69,14 +69,14 @@ const ConfigScreen = () => {
     (async () => {
       const cts = await sdk.cma.contentType.getMany({
         spaceId: sdk.ids.space,
-        environmentId: sdk.ids.environment
+        environmentId: sdk.ids.environmentAlias
       })
 
       setAvailableContentTypes(cts.items.map(({ sys, name }) => ({ id: sys.id, name })))
 
       const editorInterfaces = await sdk.cma.editorInterface.getMany({
         spaceId: sdk.ids.space,
-        environmentId: sdk.ids.environment
+        environmentId: sdk.ids.environmentAlias
       })
 
       const assignedCts = editorInterfaces.items.reduce((acc, ei) => {

@@ -127,11 +127,11 @@ const Sidebar = () => {
 
   const getScheduledActions = useCallback(async () => {
     const payload = await sdk.cma.scheduledActions.getMany({
-      environmentId: sdk.ids.environment,
+      environmentId: sdk.ids.environmentAlias,
       spaceId: sdk.ids.space,
       query: {
         'entity.sys.id': sdk.ids.entry,
-        'environment.sys.id': sdk.ids.environment
+        'environment.sys.id': sdk.ids.environmentAlias
       }
     })
     setScheduledActions(payload.items.filter(({ sys }) => sys.status === 'scheduled'))
@@ -145,7 +145,7 @@ const Sidebar = () => {
         const { sys: { id } } = await sdk.cma.bulkAction.validate(
           {
             spaceId: sdk.ids.space,
-            environmentId: sdk.ids.environment
+            environmentId: sdk.ids.environmentAlias
           },
           {
             entities: {
@@ -168,7 +168,7 @@ const Sidebar = () => {
   useEffect(() => {
     const checkValidationResults = async () => {
       const { controls = [] } = await sdk.cma.editorInterface.get({
-        environmentId: sdk.ids.environment,
+        environmentId: sdk.ids.environmentAlias,
         spaceId: sdk.ids.space,
         contentTypeId: sdk.ids.contentType
       })
@@ -190,7 +190,7 @@ const Sidebar = () => {
       if (entityValidationId) {
         const validationResults = await sdk.cma.bulkAction.get({
           spaceId: sdk.ids.space,
-          environmentId: sdk.ids.environment,
+          environmentId: sdk.ids.environmentAlias,
           bulkActionId: entityValidationId
         })
         if (validationResults.error) {
