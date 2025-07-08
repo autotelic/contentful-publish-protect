@@ -173,7 +173,7 @@ function Dialogue () {
         action: scheduleAction,
         date: (scheduledDay as Date),
         entryId: sdk.parameters.invocation.entryId,
-        environmentId: sdk.ids.environmentAlias,
+        environmentId: sdk.ids.environmentAlias ?? sdk.ids.environment,
         time: scheduledTime,
         timezone
       })
