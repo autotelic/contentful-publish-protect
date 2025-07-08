@@ -44,7 +44,7 @@ const ScheduleSection = ({
       if (isConfirmed) {
         await sdk.cma.scheduledActions.delete({
           spaceId: sdk.ids.space,
-          environmentId: sdk.ids.environmentAlias,
+          environmentId: sdk.ids.environmentAlias ?? sdk.ids.environment,
           scheduledActionId: action.sys.id
         })
         sdk.notifier.warning('Scheduled action canceled')

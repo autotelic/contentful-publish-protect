@@ -86,9 +86,11 @@ function PublishButton ({
     }
   }
 
+  const contentfulEnv = sdk.ids.environmentAlias ?? sdk.ids.environment
+
   const createEntryUrl = (entryId: string) => (
     new URL(
-      `/spaces/${sdk.ids.space}/environments/${sdk.ids.environmentAlias}/entries/${entryId}`,
+      `/spaces/${sdk.ids.space}/environments/${contentfulEnv}/entries/${entryId}`,
       'https://app.contentful.com'
     ).toString()
   )
@@ -101,7 +103,7 @@ function PublishButton ({
       } else {
         const linksToEntry = await sdk.cma.entry.getMany({
           spaceId: sdk.ids.space,
-          environmentId: sdk.ids.environmentAlias,
+          environmentId: sdk.ids.environmentAlias ?? sdk.ids.environment,
           query: { links_to_entry: sdk.ids.entry }
         })
 
@@ -126,7 +128,7 @@ function PublishButton ({
     try {
       const linksToEntry = await sdk.cma.entry.getMany({
         spaceId: sdk.ids.space,
-        environmentId: sdk.ids.environmentAlias,
+        environmentId: sdk.ids.environmentAlias ?? sdk.ids.environment,
         query: { links_to_entry: sdk.ids.entry }
       })
 
